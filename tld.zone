@@ -1,0 +1,15 @@
+$TTL 3600
+@	IN	SOA	tld.	admin.tld. (
+			2022012001 ; Serial
+			86400      ; Refresh
+			7200       ; Retry
+			360000     ; Expire
+			3600	   ; Negative Caching
+			)
+
+@	IN	NS	ns1.tld.
+
+ns1		IN	AAAA	fddd:53::1
+ns1		IN	A		172.17.53.1
+outside IN	AAAA	fddd:53::
+outside IN  A		172.17.53.0

@@ -1,0 +1,97 @@
+#!/bin/bash
+
+set -xe
+
+. config.sh
+
+
+if [ $(id -u) -ne 0 ]; then
+	echo "You must be root!"
+	exit 1
+fi
+
+
+setup_netns()
+{
+	local OIFS=$IFS
+	IFS="
+"
+	local FOUND=0
+	for ns in $(ip -o netns list | sed 's/.(.*$//') ; do 
+		if [ "$ns" = "$NETNS_NAME" ] ; then
+		   FOUND=1
+		fi
+	done
+
+	IFS="$OIFS"
+
+	if [ $FOUND -le 0 ] ; then
+		ip netns add "$NETNS_NAME"
+		ip -n "$NETNS_NAME" link set lo up
+	fi
+}
+
+add_veth()
+{
+	local FOUND=0
+	local INSIDE=0
+	for intf in $(ip -o link list | awk '{gsub(":", "", $2); print $2}') ; do
+		if [ "$intf" = "$VETH_NAME" ] ;then
+			INSIDE=1
+		fi
+		if [ "$intf" = "p$VETH_NAME" ] ;then
+			FOUND=1
+		fi
+	done
+
+	if [ $FOUND -le 0 ] ; then
+		ip link add name "$VETH_NAME" type veth peer "p$VETH_NAME"
+		ip link set "$VETH_NAME" netns "$NETNS_NAME"
+		ip -n "$NETNS_NAME" link set "$VETH_NAME" up
+		ip -n "$NETNS_NAME" addr add "$INSIDE_IP6_NET" dev "$VETH_NAME"
+		ip -n "$NETNS_NAME" addr add "$INSIDE_IP4_NET" dev "$VETH_NAME"
+		ip -n "$NETNS_NAME" -6 route add default dev "$VETH_NAME" via "${OUTSIDE_IP6_NET%/*}"
+		ip -n "$NETNS_NAME" -4 route add default dev "$VETH_NAME" via "${OUTSIDE_IP4_NET%/*}"
+
+		ip link set "p$VETH_NAME" up
+		ip add add "${OUTSIDE_IP6_NET}" dev "p$VETH_NAME"
+		ip add add "${OUTSIDE_IP4_NET}" dev "p$VETH_NAME"
+	fi
+}
+
+
+add_nat()
+{
+	local INETIF="$1"
+	local FOUND=0
+	local OIFS=$IFS
+	IFS="
+"
+	for rule in $(iptables -t nat -vnL POSTROUTING | sed '1,2d') ;do
+		if [ -n "$(echo "$rule" | grep -E 'MASQUERADE.*'"$INETIF")" ]; then
+			FOUND=1
+		fi
+	done
+	IFS="$OIFS"
+
+	if [ $FOUND -le 0 ] ; then
+		iptables -t nat -A POSTROUTING -o $INETIF -j MASQUERADE
+	fi
+}
+
+get_defaultroute_intf()
+{
+	local INETIF="$(ip -o route list match 0.0.0.0/0 | awk '{for(i=1;i<=NF;i++){ if ($i == "dev"){i++; print $i}}}')"
+	if [ -z "$INETIF" ] ; then
+		echo "No default route found, needed to setup Source NAT!"
+	fi
+	echo "$INETIF"
+}
+
+INETIF=$(get_defaultroute_intf)
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+setup_netns
+add_veth
+add_nat $INETIF

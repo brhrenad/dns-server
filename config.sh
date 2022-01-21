@@ -1,0 +1,10 @@
+#!/bin/sh
+
+NETNS_NAME="dns-server"
+VETH_NAME="vethdns"
+
+INSIDE_IP6_NET="fddd:53::1/127"
+OUTSIDE_IP6_NET="fddd:53::/127"
+
+INSIDE_IP4_NET="172.17.53.1/31"
+OUTSIDE_IP4_NET="172.17.53.0/31"

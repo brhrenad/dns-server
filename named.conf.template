@@ -1,0 +1,17 @@
+options {
+ directory "###DIR###cache";
+ lock-file "###DIR###named.locked";
+ pid-file "###DIR###named.pid";
+ dnssec-validation no;
+ session-keyfile "###DIR###session.key";
+};
+
+zone "." {
+ type hint;
+ file "/usr/share/dns/root.hints";
+};
+
+zone "tld" {
+ type master;
+ file "###DIR###tld.zone";
+};
